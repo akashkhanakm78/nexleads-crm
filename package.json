@@ -1,0 +1,13 @@
+{
+  "name": "sales-tracker-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "pnpm --filter sales-tracker-backend dev",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
