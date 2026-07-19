@@ -73,7 +73,7 @@ async function createConnection(): Promise<void> {
     isConnecting = false;
     console.log('[RabbitMQ] Connected');
 
-    conn.on('error', (err) => {
+    conn.on('error', (err: any) => {
       console.error('[RabbitMQ] Connection error:', err.message);
     });
     conn.on('close', () => {

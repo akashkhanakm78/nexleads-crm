@@ -59,12 +59,17 @@ async function handleActivityEvent(
     return;
   }
 
+  if (!payload.leadId) {
+    console.warn('[ActivityConsumer] Skipping activity write: missing leadId');
+    return;
+  }
+
   await prisma.activity.create({
     data: {
       type:           payload.activityType ?? ActivityType.NOTE,
       content,
       userId:         payload.userId,
-      leadId:         payload.leadId || undefined,
+      leadId:         payload.leadId,
       organisationId: payload.orgId,
     },
   });
