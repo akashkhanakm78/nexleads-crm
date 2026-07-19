@@ -13,6 +13,22 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: sales-tracker-mq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: adminpassword
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   # ─── Object Storage ──────────────────────────────────────────────────────────
   minio:
     image: minio/minio:latest
@@ -43,12 +59,15 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://admin:adminpassword@rabbitmq:5672
       - MINIO_ENDPOINT=minio
       - MINIO_PORT=9000
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     depends_on:
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "const http = require('http'); const req = http.request('http://localhost:5000/api/health', { timeout: 2000 }, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.end();"]
@@ -80,3 +99,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  rabbitmq_data:

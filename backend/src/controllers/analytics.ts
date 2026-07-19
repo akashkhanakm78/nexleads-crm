@@ -1,12 +1,23 @@
 import { Response } from 'express';
 import { PrismaClient, LeadStatus } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { getCache, setCache } from '../redis';
 
 const prisma = new PrismaClient();
 
 export async function getDashboardStats(req: AuthenticatedRequest, res: Response) {
   try {
     const orgId = req.user!.organisationId;
+    const cacheKey = `analytics:${orgId}`;
+
+    // Try to fetch from Redis cache first
+    const cachedStats = await getCache(cacheKey);
+    if (cachedStats) {
+      console.log(`[Redis Cache Hit]: Serving analytics stats for organisation: ${orgId}`);
+      return res.json(JSON.parse(cachedStats));
+    }
+
+    console.log(`[Redis Cache Miss]: Fetching analytics stats from database for organisation: ${orgId}`);
 
     const totalLeads = await prisma.lead.count({ where: { organisationId: orgId } });
     const newLeads = await prisma.lead.count({ where: { status: LeadStatus.NEW, organisationId: orgId } });
@@ -86,7 +97,7 @@ export async function getDashboardStats(req: AuthenticatedRequest, res: Response
       activities: user.activities.length
     }));
 
-    return res.json({
+    const statsResult = {
       cards: {
         totalLeads,
         newLeads,
@@ -100,7 +111,12 @@ export async function getDashboardStats(req: AuthenticatedRequest, res: Response
         revenueTrend,
         teamPerformance
       }
-    });
+    };
+
+    // Store in Redis (TTL of 1 hour)
+    await setCache(cacheKey, JSON.stringify(statsResult), 3600);
+
+    return res.json(statsResult);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }

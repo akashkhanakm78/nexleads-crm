@@ -4,7 +4,10 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { LayoutDashboard, Users, GitFork, Settings, LogOut, Briefcase, Building2, Contact, Calendar, Bell, BellRing, Check } from 'lucide-react';
+import {
+  LayoutDashboard, Users, GitFork, Settings, LogOut, Briefcase,
+  Building2, Contact, Calendar, Bell, BellRing, Check, ChevronLeft, ChevronRight
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -20,9 +23,10 @@ interface Notification {
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, logout, fetchWithAuth } = useAuth();
-  
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const fetchNotifications = async () => {
     try {
@@ -38,7 +42,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     if (user) {
       fetchNotifications();
-      // Poll notifications every 10 seconds
       const interval = setInterval(fetchNotifications, 10000);
       return () => clearInterval(interval);
     }
@@ -72,17 +75,43 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50">
       {/* Sidebar */}
-      <aside className="w-64 glass flex flex-col justify-between border-r border-slate-200/50 p-6 shrink-0">
-        <div>
+      <motion.aside
+        animate={{ width: collapsed ? 72 : 256 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        className="glass flex flex-col justify-between border-r border-slate-200/50 shrink-0 overflow-hidden relative"
+      >
+        {/* Collapse toggle button */}
+        <button
+          onClick={() => setCollapsed(prev => !prev)}
+          className="absolute -right-3.5 top-20 z-30 w-7 h-7 rounded-full bg-white border border-slate-200 shadow-md flex items-center justify-center text-slate-500 hover:text-primary hover:border-primary transition-all cursor-pointer"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed
+            ? <ChevronRight className="w-3.5 h-3.5" />
+            : <ChevronLeft className="w-3.5 h-3.5" />
+          }
+        </button>
+
+        <div className={`flex flex-col gap-0 ${collapsed ? 'px-3 pt-5' : 'px-6 pt-6'}`}>
           {/* Logo */}
-          <div className="flex items-center gap-3 mb-10">
-            <div className="bg-primary/10 text-primary p-2.5 rounded-2xl">
+          <div className={`flex items-center gap-3 mb-10 ${collapsed ? 'justify-center' : ''}`}>
+            <div className="bg-primary/10 text-primary p-2.5 rounded-2xl shrink-0">
               <Briefcase className="w-6 h-6" />
             </div>
-            <div>
-              <h1 className="font-bold text-lg leading-tight tracking-tight text-slate-800">NexLeads</h1>
-              <p className="text-[10px] uppercase font-semibold tracking-widest text-slate-400">Sales Intelligence</p>
-            </div>
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.div
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 'auto' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden whitespace-nowrap"
+                >
+                  <h1 className="font-bold text-lg leading-tight tracking-tight text-slate-800">NexLeads</h1>
+                  <p className="text-[10px] uppercase font-semibold tracking-widest text-slate-400">Sales Intelligence</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Navigation */}
@@ -91,9 +120,14 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               const isActive = pathname === item.href;
               return (
                 <Link key={item.name} href={item.href}>
-                  <div className={`relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
-                    isActive ? 'text-primary' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
-                  }`}>
+                  <div
+                    title={collapsed ? item.name : undefined}
+                    className={`relative flex items-center gap-3 py-3 rounded-xl text-sm font-medium transition-all group cursor-pointer ${
+                      collapsed ? 'justify-center px-2' : 'px-4'
+                    } ${
+                      isActive ? 'text-primary' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+                    }`}
+                  >
                     {isActive && (
                       <motion.div
                         layoutId="activeIndicator"
@@ -101,8 +135,20 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                         transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                       />
                     )}
-                    <item.icon className={`w-5 h-5 transition-transform group-hover:scale-105 ${isActive ? 'text-primary' : 'text-slate-400'}`} />
-                    <span className="relative z-10">{item.name}</span>
+                    <item.icon className={`w-5 h-5 shrink-0 transition-transform group-hover:scale-105 ${isActive ? 'text-primary' : 'text-slate-400'}`} />
+                    <AnimatePresence>
+                      {!collapsed && (
+                        <motion.span
+                          initial={{ opacity: 0, width: 0 }}
+                          animate={{ opacity: 1, width: 'auto' }}
+                          exit={{ opacity: 0, width: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="relative z-10 overflow-hidden whitespace-nowrap"
+                        >
+                          {item.name}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </Link>
               );
@@ -111,31 +157,57 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
 
         {/* User profile & Logout */}
-        <div className="border-t border-slate-200/60 pt-4 space-y-4">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-blue-400 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+        <div className={`border-t border-slate-200/60 pt-4 space-y-3 ${collapsed ? 'px-3 pb-5' : 'px-6 pb-6'}`}>
+          <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : 'px-2'}`}>
+            <div
+              title={collapsed ? (user?.name || 'User') : undefined}
+              className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-blue-400 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0"
+            >
               {user?.name ? user.name[0] : 'U'}
             </div>
-            <div className="overflow-hidden">
-              <h4 className="font-semibold text-sm text-slate-700 truncate">{user?.name || 'Loading...'}</h4>
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500 capitalize">
-                {user?.role?.replace('_', ' ').toLowerCase() || 'Viewer'}
-              </span>
-            </div>
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.div
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 'auto' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="overflow-hidden"
+                >
+                  <h4 className="font-semibold text-sm text-slate-700 truncate whitespace-nowrap">{user?.name || 'Loading...'}</h4>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500 capitalize whitespace-nowrap">
+                    {user?.role?.replace('_', ' ').toLowerCase() || 'Viewer'}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <button
             onClick={logout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer group"
+            title={collapsed ? 'Logout' : undefined}
+            className={`w-full flex items-center gap-3 py-3 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer group ${collapsed ? 'justify-center px-2' : 'px-4'}`}
           >
-            <LogOut className="w-5 h-5 transition-transform group-hover:translate-x-0.5" />
-            <span>Logout</span>
+            <LogOut className="w-5 h-5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.span
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 'auto' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="overflow-hidden whitespace-nowrap"
+                >
+                  Logout
+                </motion.span>
+              )}
+            </AnimatePresence>
           </button>
         </div>
-      </aside>
+      </motion.aside>
 
       {/* Main content wrapper */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
+      <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
         {/* Top Header */}
         <header className="h-16 border-b border-slate-200/50 bg-white/70 backdrop-blur-md flex items-center justify-between px-8 z-20 shrink-0">
           <div>
@@ -143,7 +215,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               {pathname.substring(1) || 'Workspace'}
             </h2>
           </div>
-          
+
           <div className="flex items-center gap-6">
             {/* Notification Bell Icon */}
             <div className="relative">

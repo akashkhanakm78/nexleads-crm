@@ -2,6 +2,9 @@ import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { broadcastToOrganisation } from '../websocket';
+import { clearCache } from '../redis';
+import { publish, ROUTING_KEYS } from '../rabbitmq';
+import type { ActivityEvent } from '../consumers/activityConsumer';
 
 const prisma = new PrismaClient();
 
@@ -43,20 +46,21 @@ export async function createMeeting(req: AuthenticatedRequest, res: Response) {
 
     broadcastToOrganisation(req.user!.organisationId, { type: 'MEETINGS_UPDATE' });
 
-    // Auto-create Activity Timeline log if linked to a lead
+    // Async activity log linked to lead (if any)
     if (leadId) {
-      const formattedDate = new Date(startTime).toLocaleString();
-      await prisma.activity.create({
-        data: {
-          type: 'MEETING',
-          content: `Scheduled meeting: "${title}" for ${formattedDate}`,
-          userId: req.user!.id,
-          leadId,
-          organisationId: req.user!.organisationId
-        }
+      const formattedDate = new Date(startTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+      publish<ActivityEvent>(ROUTING_KEYS.MEETING_CREATED, {
+        routingKey: ROUTING_KEYS.MEETING_CREATED,
+        content:  `Scheduled meeting: "${title}" for ${formattedDate}`,
+        userId:   req.user!.id,
+        orgId:    req.user!.organisationId,
+        leadId,
+        activityType: 'MEETING',
       });
       broadcastToOrganisation(req.user!.organisationId, { type: 'LEADS_UPDATE' });
     }
+
+    await clearCache(`analytics:${req.user!.organisationId}`);
 
     return res.status(201).json(meeting);
   } catch (error) {
@@ -89,6 +93,8 @@ export async function deleteMeeting(req: AuthenticatedRequest, res: Response) {
     if (existing.leadId) {
       broadcastToOrganisation(req.user!.organisationId, { type: 'LEADS_UPDATE' });
     }
+
+    await clearCache(`analytics:${req.user!.organisationId}`);
 
     return res.json({ message: 'Meeting deleted successfully' });
   } catch (error) {

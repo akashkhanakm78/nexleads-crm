@@ -6,6 +6,9 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 
 import apiRouter from './routes/api';
+import { initRabbitMQ } from './rabbitmq';
+import { startActivityConsumer }    from './consumers/activityConsumer';
+import { startNotificationConsumer } from './consumers/notificationConsumer';
 
 dotenv.config();
 
@@ -51,6 +54,16 @@ import { initWebSocketServer } from './websocket';
 // Start server
 const server = createServer(app);
 initWebSocketServer(server);
+
+// Initialise message broker + consumers (non-blocking; retries on failure)
+initRabbitMQ().then(() => {
+  return Promise.all([
+    startActivityConsumer(),
+    startNotificationConsumer(),
+  ]);
+}).catch((err) => {
+  console.error('[RabbitMQ] Startup error – app continues without MQ:', err.message);
+});
 
 server.listen(port, () => {
   console.log(`[server]: Server is running at http://localhost:${port}`);

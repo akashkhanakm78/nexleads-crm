@@ -2,11 +2,10 @@ FROM node:20-slim
 RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app
 COPY package.json ./
-RUN npm install -g pnpm && \
-    pnpm config set registry https://registry.npmmirror.com && \
-    pnpm config set verify-store-integrity false && \
-    pnpm install --ignore-scripts
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install
+
 COPY . .
-RUN pnpm prisma generate
+RUN npx prisma generate
 EXPOSE 5000
-CMD ["pnpm", "run", "dev"]
+CMD ["npm", "run", "dev"]

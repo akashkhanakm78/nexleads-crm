@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { clearCache } from '../redis';
 
 const prisma = new PrismaClient();
 
@@ -35,6 +36,7 @@ export async function createCompany(req: AuthenticatedRequest, res: Response) {
         organisationId: req.user!.organisationId
       }
     });
+    await clearCache(`analytics:${req.user!.organisationId}`);
     return res.status(201).json(company);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -65,6 +67,7 @@ export async function updateCompany(req: AuthenticatedRequest, res: Response) {
         employeeCount: employeeCount ? parseInt(employeeCount) : null
       }
     });
+    await clearCache(`analytics:${req.user!.organisationId}`);
     return res.json(company);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -88,6 +91,7 @@ export async function deleteCompany(req: AuthenticatedRequest, res: Response) {
     await prisma.company.delete({
       where: { id }
     });
+    await clearCache(`analytics:${req.user!.organisationId}`);
     return res.json({ message: 'Company deleted successfully' });
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });

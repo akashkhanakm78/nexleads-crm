@@ -1,22 +1,41 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import SidebarLayout from '@/components/SidebarLayout';
 import LeadDetailsPanel from '@/components/LeadDetailsPanel';
+import SearchableDropdown from '@/components/SearchableDropdown';
 import { useAuth } from '@/context/AuthContext';
 import { Plus, Search, Filter, Trash2, ArrowUpDown, PhoneCall, CalendarPlus, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+const CONTACT_STATUSES = [
+  'Contacted',
+  'Not Answer',
+  'Call Later',
+  'Not Availabe',
+  'Rejected',
+];
+
+interface Activity {
+  id: string;
+  type: string;
+  content: string;
+  createdAt: string;
+  user?: { name: string };
+}
+
 interface Lead {
   id: string;
   title: string;
   status: string;
   priority: string;
+  contactStatus: string | null;
   value: number | null;
   company: { id: string; name: string } | null;
   contact: { id: string; firstName: string; lastName: string; email: string; phone?: string } | null;
+  activities: Activity[];
   createdAt: string;
 }
 
@@ -47,9 +66,10 @@ export default function LeadsPage() {
   const [meetingEnd, setMeetingEnd] = useState('');
   const [meetingDesc, setMeetingDesc] = useState('');
 
-  // Search & Filter state
+  // Search & Filter state (all sent to backend)
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [contactStatusFilter, setContactStatusFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [minVal, setMinVal] = useState('');
   const [maxVal, setMaxVal] = useState('');
@@ -58,7 +78,7 @@ export default function LeadsPage() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize] = useState(10);
 
   // Modal form state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,26 +86,53 @@ export default function LeadsPage() {
   const [newValue, setNewValue] = useState('');
   const [newStatus, setNewStatus] = useState('NEW');
   const [newPriority, setNewPriority] = useState('MEDIUM');
+  const [newContactStatus, setNewContactStatus] = useState('');
   const [newCompanyId, setNewCompanyId] = useState('');
   const [newContactId, setNewContactId] = useState('');
 
-  const fetchData = async () => {
-    try {
-      const leadsRes = await fetchWithAuth(`${BACKEND_URL}/api/leads`);
-      const companiesRes = await fetchWithAuth(`${BACKEND_URL}/api/companies`);
-      const contactsRes = await fetchWithAuth(`${BACKEND_URL}/api/contacts`);
+  const buildQueryParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set('search', search.trim());
+    if (statusFilter !== 'ALL') params.set('status', statusFilter);
+    if (contactStatusFilter !== 'ALL') params.set('contactStatus', contactStatusFilter);
+    if (priorityFilter !== 'ALL') params.set('priority', priorityFilter);
+    if (minVal) params.set('minVal', minVal);
+    if (maxVal) params.set('maxVal', maxVal);
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    return params.toString();
+  }, [search, statusFilter, contactStatusFilter, priorityFilter, minVal, maxVal, startDate, endDate]);
 
-      if (leadsRes.ok && companiesRes.ok && contactsRes.ok) {
+  const fetchLeads = useCallback(async () => {
+    try {
+      const qs = buildQueryParams();
+      const leadsRes = await fetchWithAuth(`${BACKEND_URL}/api/leads${qs ? `?${qs}` : ''}`);
+      if (leadsRes.ok) {
         setLeads(await leadsRes.json());
-        setCompanies(await companiesRes.json());
-        setContacts(await contactsRes.json());
       }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [buildQueryParams, fetchWithAuth]);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [leadsRes, companiesRes, contactsRes] = await Promise.all([
+        fetchWithAuth(`${BACKEND_URL}/api/leads${buildQueryParams() ? `?${buildQueryParams()}` : ''}`),
+        fetchWithAuth(`${BACKEND_URL}/api/companies`),
+        fetchWithAuth(`${BACKEND_URL}/api/contacts`),
+      ]);
+
+      if (leadsRes.ok) setLeads(await leadsRes.json());
+      if (companiesRes.ok) setCompanies(await companiesRes.json());
+      if (contactsRes.ok) setContacts(await contactsRes.json());
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildQueryParams, fetchWithAuth]);
 
   const handleCallAction = async (leadId: string) => {
     try {
@@ -97,8 +144,7 @@ export default function LeadsPage() {
           content: 'Initiated outbound call to contact.'
         })
       });
-      alert('Call logged successfully!');
-      fetchData();
+      fetchLeads();
     } catch (e) {
       console.error(e);
     }
@@ -128,8 +174,7 @@ export default function LeadsPage() {
         setMeetingEnd('');
         setMeetingDesc('');
         setMeetingLeadId('');
-        alert('Meeting scheduled successfully!');
-        fetchData();
+        fetchLeads();
       }
     } catch (error) {
       console.error(error);
@@ -142,18 +187,25 @@ export default function LeadsPage() {
     }
   }, [authLoading]);
 
+  // Re-fetch leads when any filter/search changes
+  useEffect(() => {
+    if (!authLoading) {
+      setCurrentPage(1);
+      fetchLeads();
+    }
+  }, [search, statusFilter, contactStatusFilter, priorityFilter, minVal, maxVal, startDate, endDate]);
+
   useEffect(() => {
     const handleSocketUpdate = (e: any) => {
-      // Refresh leads when leads change OR when a contact status changes (triggers lead promotion)
       if (e.detail.type === 'LEADS_UPDATE' || e.detail.type === 'CONTACTS_UPDATE') {
-        fetchData();
+        fetchLeads();
       }
     };
     window.addEventListener('crm-socket-update', handleSocketUpdate);
     return () => {
       window.removeEventListener('crm-socket-update', handleSocketUpdate);
     };
-  }, []);
+  }, [fetchLeads]);
 
   const handleAddLead = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,6 +220,7 @@ export default function LeadsPage() {
           value: newValue,
           status: newStatus,
           priority: newPriority,
+          contactStatus: newContactStatus || null,
           companyId: newCompanyId || undefined,
           contactId: newContactId || undefined
         })
@@ -179,9 +232,10 @@ export default function LeadsPage() {
         setNewValue('');
         setNewStatus('NEW');
         setNewPriority('MEDIUM');
+        setNewContactStatus('');
         setNewCompanyId('');
         setNewContactId('');
-        fetchData();
+        fetchLeads();
       }
     } catch (error) {
       console.error(error);
@@ -202,34 +256,9 @@ export default function LeadsPage() {
     }
   };
 
-  const filteredLeads = leads.filter((lead) => {
-    const matchesSearch =
-      lead.title.toLowerCase().includes(search.toLowerCase()) ||
-      (lead.company?.name && lead.company.name.toLowerCase().includes(search.toLowerCase())) ||
-      (lead.contact?.email && lead.contact.email.toLowerCase().includes(search.toLowerCase()));
-
-    const matchesStatus = statusFilter === 'ALL' || lead.status === statusFilter;
-    const matchesPriority = priorityFilter === 'ALL' || lead.priority === priorityFilter;
-
-    // Min/Max Value
-    const matchesMinVal = !minVal || (lead.value !== null && lead.value >= parseFloat(minVal));
-    const matchesMaxVal = !maxVal || (lead.value !== null && lead.value <= parseFloat(maxVal));
-
-    // Date Range
-    const leadDate = new Date(lead.createdAt);
-    const matchesStartDate = !startDate || leadDate >= new Date(startDate);
-    const matchesEndDate = !endDate || leadDate <= new Date(new Date(endDate).setHours(23, 59, 59, 999));
-
-    return matchesSearch && matchesStatus && matchesPriority && matchesMinVal && matchesMaxVal && matchesStartDate && matchesEndDate;
-  });
-
-  const totalPages = Math.ceil(filteredLeads.length / pageSize);
-  const paginatedLeads = filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, statusFilter, priorityFilter, minVal, maxVal, startDate, endDate]);
+  // All filtering now done server-side; pagination is client-side on returned results
+  const totalPages = Math.ceil(leads.length / pageSize);
+  const paginatedLeads = leads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
@@ -251,9 +280,28 @@ export default function LeadsPage() {
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-700">Lost</span>;
       case 'NEGOTIATION':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-violet-100 text-violet-700">Negotiation</span>;
+      case 'PROPOSAL':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700">Proposal</span>;
+      case 'QUALIFIED':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-700">Qualified</span>;
+      case 'CONTACTED':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">Contacted</span>;
       default:
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700 capitalize">{status.toLowerCase()}</span>;
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 capitalize">{status.toLowerCase()}</span>;
     }
+  };
+
+  const getContactStatusBadge = (cs: string | null) => {
+    if (!cs) return <span className="text-slate-300 text-[10px]">—</span>;
+    const colors: Record<string, string> = {
+      'Contacted': 'bg-emerald-100 text-emerald-700',
+      'Not Answer': 'bg-amber-100 text-amber-700',
+      'Call Later': 'bg-sky-100 text-sky-700',
+      'Not Availabe': 'bg-orange-100 text-orange-700',
+      'Rejected': 'bg-rose-100 text-rose-700',
+    };
+    const cls = colors[cs] || 'bg-slate-100 text-slate-600';
+    return <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${cls}`}>{cs}</span>;
   };
 
   if (loading || authLoading) {
@@ -277,7 +325,7 @@ export default function LeadsPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => fetchData()}
+              onClick={() => fetchLeads()}
               className="flex items-center justify-center p-2.5 border border-slate-200 text-slate-500 rounded-xl hover:bg-slate-50 active:scale-95 transition-all cursor-pointer bg-white"
               title="Refresh"
             >
@@ -300,19 +348,19 @@ export default function LeadsPage() {
               <Search className="w-4.5 h-4.5 absolute left-3.5 top-3.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search leads..."
+                placeholder="Search leads, logs..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-primary transition-all"
               />
             </div>
 
-            <div className="flex gap-3 w-full md:w-auto">
-              {/* Status Filter */}
+            <div className="flex flex-wrap gap-3 w-full md:w-auto">
+              {/* Stage Filter */}
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full md:w-40 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none text-slate-600 font-medium"
+                className="w-full md:w-36 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none text-slate-600 font-medium"
               >
                 <option value="ALL">All Stages</option>
                 <option value="NEW">New</option>
@@ -324,11 +372,23 @@ export default function LeadsPage() {
                 <option value="LOST">Lost</option>
               </select>
 
+              {/* Contact Status Filter */}
+              <select
+                value={contactStatusFilter}
+                onChange={(e) => setContactStatusFilter(e.target.value)}
+                className="w-full md:w-40 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none text-slate-600 font-medium"
+              >
+                <option value="ALL">All Call Status</option>
+                {CONTACT_STATUSES.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+
               {/* Priority Filter */}
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
-                className="w-full md:w-40 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none text-slate-600 font-medium"
+                className="w-full md:w-36 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none text-slate-600 font-medium"
               >
                 <option value="ALL">All Priorities</option>
                 <option value="HIGH">High</option>
@@ -389,70 +449,86 @@ export default function LeadsPage() {
                 <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-semibold text-xs uppercase tracking-wider">
                   <th className="py-4 px-6">Lead Title</th>
                   <th className="py-4 px-6">Company</th>
-                  <th className="py-4 px-6">Contact Email</th>
-                  <th className="py-4 px-6">Phone Number</th>
+                  <th className="py-4 px-6">Contact</th>
+                  <th className="py-4 px-6">Phone</th>
                   <th className="py-4 px-6">Value</th>
                   <th className="py-4 px-6">Stage</th>
+                  <th className="py-4 px-6">Call Status</th>
                   <th className="py-4 px-6">Priority</th>
+                  <th className="py-4 px-6">Last Log</th>
                   <th className="py-4 px-6 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700 text-xs">
                 {paginatedLeads.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-10 text-center text-slate-400">
+                    <td colSpan={10} className="py-10 text-center text-slate-400">
                       No leads found matching criteria.
                     </td>
                   </tr>
                 ) : (
-                  paginatedLeads.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-slate-50/40 transition-colors">
-                      <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 font-semibold text-slate-800 cursor-pointer">{lead.title}</td>
-                      <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 text-slate-500 cursor-pointer">{lead.company?.name || '-'}</td>
-                      <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 text-slate-500 cursor-pointer">{lead.contact?.email || '-'}</td>
-                      <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 text-slate-500 cursor-pointer">{lead.contact?.phone || '-'}</td>
-                      <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 font-semibold text-slate-800 cursor-pointer">
-                        {lead.value ? `₹${lead.value.toLocaleString()}` : '-'}
-                      </td>
-                      <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 cursor-pointer">{getStatusBadge(lead.status)}</td>
-                      <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 cursor-pointer">{getPriorityBadge(lead.priority)}</td>
-                      <td className="py-4.5 px-6 text-right">
-                        <div className="flex justify-end items-center gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCallAction(lead.id);
-                            }}
-                            className="p-2 text-primary bg-primary/5 hover:bg-primary hover:text-white rounded-xl transition-all cursor-pointer"
-                            title="Log Call"
-                          >
-                            <PhoneCall className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMeetingLeadId(lead.id);
-                              setMeetingTitle(`Sync: ${lead.title}`);
-                              setIsMeetingModalOpen(true);
-                            }}
-                            className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-xl transition-all cursor-pointer"
-                            title="Schedule Meeting"
-                          >
-                            <CalendarPlus className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteLead(lead.id);
-                            }}
-                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  paginatedLeads.map((lead) => {
+                    const lastActivity = lead.activities?.[0];
+                    return (
+                      <tr key={lead.id} className="hover:bg-slate-50/40 transition-colors">
+                        <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 font-semibold text-slate-800 cursor-pointer">{lead.title}</td>
+                        <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 text-slate-500 cursor-pointer">{lead.company?.name || '-'}</td>
+                        <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 text-slate-500 cursor-pointer">{lead.contact?.email || '-'}</td>
+                        <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 text-slate-500 cursor-pointer">{lead.contact?.phone || '-'}</td>
+                        <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 font-semibold text-slate-800 cursor-pointer">
+                          {lead.value ? `₹${lead.value.toLocaleString()}` : '-'}
+                        </td>
+                        <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 cursor-pointer">{getStatusBadge(lead.status)}</td>
+                        <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 cursor-pointer">{getContactStatusBadge(lead.contactStatus)}</td>
+                        <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 cursor-pointer">{getPriorityBadge(lead.priority)}</td>
+                        <td onClick={() => setSelectedLeadId(lead.id)} className="py-4.5 px-6 cursor-pointer max-w-[180px]">
+                          {lastActivity ? (
+                            <div>
+                              <p className="text-slate-600 truncate font-medium" title={lastActivity.content}>{lastActivity.content}</p>
+                              <p className="text-[10px] text-slate-400">{new Date(lastActivity.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+                            </div>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-4.5 px-6 text-right">
+                          <div className="flex justify-end items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCallAction(lead.id);
+                              }}
+                              className="p-2 text-primary bg-primary/5 hover:bg-primary hover:text-white rounded-xl transition-all cursor-pointer"
+                              title="Log Call"
+                            >
+                              <PhoneCall className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMeetingLeadId(lead.id);
+                                setMeetingTitle(`Sync: ${lead.title}`);
+                                setIsMeetingModalOpen(true);
+                              }}
+                              className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-xl transition-all cursor-pointer"
+                              title="Schedule Meeting"
+                            >
+                              <CalendarPlus className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteLead(lead.id);
+                              }}
+                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -463,7 +539,7 @@ export default function LeadsPage() {
         {totalPages > 1 && (
           <div className="flex justify-between items-center bg-white px-6 py-4 rounded-2xl border border-slate-200/50 text-xs font-semibold text-slate-500">
             <span>
-              Showing Page {currentPage} of {totalPages || 1} ({filteredLeads.length} Total Leads)
+              Showing Page {currentPage} of {totalPages || 1} ({leads.length} Total Leads)
             </span>
             <div className="flex gap-2">
               <button
@@ -552,46 +628,56 @@ export default function LeadsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="uppercase tracking-wider">Company</label>
-                    <select
-                      value={newCompanyId}
-                      onChange={(e) => setNewCompanyId(e.target.value)}
-                      className="w-full px-3 py-3 rounded-xl border border-slate-200 focus:outline-none text-slate-600"
-                    >
-                      <option value="">Select Company</option>
-                      {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+                    <SearchableDropdown
+                      options={companies.map(c => ({ id: c.id, name: c.name }))}
+                      selectedId={newCompanyId}
+                      onChange={(id) => setNewCompanyId(id)}
+                      placeholder="Select Company"
+                    />
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="uppercase tracking-wider">Contact</label>
-                    <select
-                      value={newContactId}
-                      onChange={(e) => setNewContactId(e.target.value)}
-                      className="w-full px-3 py-3 rounded-xl border border-slate-200 focus:outline-none text-slate-600"
-                    >
-                      <option value="">Select Contact</option>
-                      {contacts.map(c => (
-                        <option key={c.id} value={c.id}>{`${c.firstName} ${c.lastName}`}</option>
-                      ))}
-                    </select>
+                    <SearchableDropdown
+                      options={contacts.map(c => ({ id: c.id, name: `${c.firstName} ${c.lastName}` }))}
+                      selectedId={newContactId}
+                      onChange={(id) => setNewContactId(id)}
+                      placeholder="Select Contact"
+                    />
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="uppercase tracking-wider">Stage</label>
-                  <select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value)}
-                    className="w-full px-3 py-3 rounded-xl border border-slate-200 focus:outline-none text-slate-600"
-                  >
-                    <option value="NEW">New</option>
-                    <option value="CONTACTED">Contacted</option>
-                    <option value="QUALIFIED">Qualified</option>
-                    <option value="PROPOSAL">Proposal</option>
-                    <option value="NEGOTIATION">Negotiation</option>
-                    <option value="WON">Won</option>
-                    <option value="LOST">Lost</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="uppercase tracking-wider">Stage</label>
+                    <select
+                      value={newStatus}
+                      onChange={(e) => setNewStatus(e.target.value)}
+                      className="w-full px-3 py-3 rounded-xl border border-slate-200 focus:outline-none text-slate-600"
+                    >
+                      <option value="NEW">New</option>
+                      <option value="CONTACTED">Contacted</option>
+                      <option value="QUALIFIED">Qualified</option>
+                      <option value="PROPOSAL">Proposal</option>
+                      <option value="NEGOTIATION">Negotiation</option>
+                      <option value="WON">Won</option>
+                      <option value="LOST">Lost</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="uppercase tracking-wider">Call Status</label>
+                    <select
+                      value={newContactStatus}
+                      onChange={(e) => setNewContactStatus(e.target.value)}
+                      className="w-full px-3 py-3 rounded-xl border border-slate-200 focus:outline-none text-slate-600"
+                    >
+                      <option value="">None</option>
+                      {CONTACT_STATUSES.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="flex gap-3 pt-2">
@@ -614,13 +700,14 @@ export default function LeadsPage() {
           </div>
         )}
       </AnimatePresence>
+
       {/* Lead Details Slide-over Panel */}
       <AnimatePresence>
         {selectedLeadId && (
           <LeadDetailsPanel
             leadId={selectedLeadId}
             onClose={() => setSelectedLeadId(null)}
-            onUpdate={fetchData}
+            onUpdate={fetchLeads}
             fetchWithAuth={fetchWithAuth}
           />
         )}

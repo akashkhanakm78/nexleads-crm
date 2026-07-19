@@ -120,6 +120,7 @@ model Lead {
   title          String
   status         LeadStatus   @default(NEW)
   priority       LeadPriority @default(MEDIUM)
+  contactStatus  String?
   value          Float?
   companyId      String?
   contactId      String?

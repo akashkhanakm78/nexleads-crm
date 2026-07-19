@@ -187,15 +187,15 @@ export default function MeetingsPage() {
                   <div className="flex items-center gap-2">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
                     <span className="text-slate-600">
-                      {new Date(meeting.startTime).toLocaleDateString()}
+                      {new Date(meeting.startTime).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5 text-slate-400" />
                     <span className="text-slate-600">
-                      {`${new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(
+                      {`${new Date(meeting.startTime).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })} - ${new Date(
                         meeting.endTime
-                      ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                      ).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}`}
                     </span>
                   </div>
                   {meeting.lead && (

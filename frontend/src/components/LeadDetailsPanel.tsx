@@ -6,6 +6,14 @@ import { motion } from 'framer-motion';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+const CONTACT_STATUSES = [
+  'Contacted',
+  'Not Answer',
+  'Call Later',
+  'Not Availabe',
+  'Rejected',
+];
+
 interface Activity {
   id: string;
   type: 'CALL' | 'EMAIL' | 'WHATSAPP' | 'MEETING' | 'VISIT' | 'TASK' | 'NOTE';
@@ -46,6 +54,7 @@ export default function LeadDetailsPanel({ leadId, onClose, onUpdate, fetchWithA
   const [value, setValue] = useState('');
   const [status, setStatus] = useState('');
   const [priority, setPriority] = useState('');
+  const [contactStatus, setContactStatus] = useState<string>('');
 
   // File upload state
   const [uploading, setUploading] = useState(false);
@@ -62,6 +71,7 @@ export default function LeadDetailsPanel({ leadId, onClose, onUpdate, fetchWithA
           setValue(current.value?.toString() || '');
           setStatus(current.status);
           setPriority(current.priority);
+          setContactStatus(current.contactStatus || '');
         }
       }
 
@@ -94,7 +104,8 @@ export default function LeadDetailsPanel({ leadId, onClose, onUpdate, fetchWithA
           title,
           value: value ? parseFloat(value) : null,
           status,
-          priority
+          priority,
+          contactStatus: contactStatus || null
         })
       });
       if (res.ok) {
@@ -285,6 +296,21 @@ export default function LeadDetailsPanel({ leadId, onClose, onUpdate, fetchWithA
                 </div>
               </div>
             </div>
+
+            <div className="space-y-1">
+              <label className="uppercase tracking-wider">Call / Contact Status</label>
+              <select
+                value={contactStatus}
+                onChange={(e) => { setContactStatus(e.target.value); }}
+                onBlur={handleUpdateLead}
+                className="w-full px-2.5 py-2 rounded-xl border border-slate-200 focus:outline-none text-slate-700 bg-slate-50"
+              >
+                <option value="">None</option>
+                {CONTACT_STATUSES.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Quick Action Logger */}
@@ -423,7 +449,7 @@ export default function LeadDetailsPanel({ leadId, onClose, onUpdate, fetchWithA
                     <div className="flex-1 bg-white p-3 rounded-2xl border border-slate-200/50 shadow-sm space-y-1">
                       <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium">
                         <span className="font-semibold text-slate-500">{act.user?.name || 'System'}</span>
-                        <span>{new Date(act.createdAt).toLocaleString()}</span>
+                        <span>{new Date(act.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</span>
                       </div>
                       <p className="text-xs font-medium text-slate-600 leading-normal">{act.content}</p>
                     </div>

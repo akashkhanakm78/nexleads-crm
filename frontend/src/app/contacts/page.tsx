@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import SidebarLayout from '@/components/SidebarLayout';
+import SearchableDropdown from '@/components/SearchableDropdown';
 import { useAuth } from '@/context/AuthContext';
 import { Plus, Search, Trash2, Mail, Phone, Building2, PhoneCall, ChevronRight, Check, AlertCircle, FileSpreadsheet, Loader2, Play, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -520,66 +521,24 @@ export default function ContactsPage() {
 
                   <div className="space-y-1.5 relative">
                     <label className="uppercase tracking-wider">Company Account *</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Search or type to create company..."
-                        value={selectedCompany ? selectedCompany.name : companySearch}
-                        onChange={(e) => {
+                    <SearchableDropdown
+                      options={companies}
+                      selectedId={selectedCompany ? selectedCompany.id : companySearch}
+                      onChange={(id) => {
+                        const matched = companies.find(c => c.id === id);
+                        if (matched) {
+                          setSelectedCompany(matched);
+                          setCompanySearch('');
+                        } else {
                           setSelectedCompany(null);
-                          setCompanySearch(e.target.value);
-                          setIsCompanyDropdownOpen(true);
-                        }}
-                        onFocus={() => setIsCompanyDropdownOpen(true)}
-                        className="w-full px-3.5 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-primary text-slate-700 font-medium pr-10"
-                        required
-                      />
-                      {selectedCompany && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCompany(null);
-                            setCompanySearch('');
-                          }}
-                          className="absolute right-3 top-3 text-slate-400 hover:text-slate-700"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-
-                    {isCompanyDropdownOpen && (companySearch || matchingCompanies.length > 0) && (
-                      <>
-                        <div onClick={() => setIsCompanyDropdownOpen(false)} className="fixed inset-0 z-10" />
-                        <div className="absolute left-0 right-0 mt-1 max-h-48 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-y-auto divide-y divide-slate-100 custom-scrollbar font-medium">
-                          {matchingCompanies.map((c) => (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedCompany(c);
-                                setIsCompanyDropdownOpen(false);
-                              }}
-                              className="w-full px-3.5 py-2.5 text-left hover:bg-slate-50 text-slate-700 text-xs flex justify-between items-center"
-                            >
-                              <span>{c.name}</span>
-                              <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                            </button>
-                          ))}
-                          {!companies.some(c => c.name.toLowerCase() === companySearch.toLowerCase()) && companySearch && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsCompanyDropdownOpen(false);
-                              }}
-                              className="w-full px-3.5 py-2.5 text-left hover:bg-blue-50 text-primary text-xs flex justify-between items-center"
-                            >
-                              <span>Create new company: "{companySearch}"</span>
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
+                          setCompanySearch(id); // Custom typed name
+                        }
+                      }}
+                      placeholder="Search or type to create company..."
+                      allowCustom={true}
+                      customActionLabel="Create new company"
+                      required={true}
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">

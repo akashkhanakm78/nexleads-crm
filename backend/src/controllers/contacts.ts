@@ -2,6 +2,9 @@ import { Response } from 'express';
 import { PrismaClient, LeadStatus, LeadPriority, ActivityType } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { broadcastToOrganisation } from '../websocket';
+import { clearCache } from '../redis';
+import { publish, ROUTING_KEYS } from '../rabbitmq';
+import type { ActivityEvent } from '../consumers/activityConsumer';
 
 const prisma = new PrismaClient();
 
@@ -93,14 +96,12 @@ const syncContactToLead = async (contactId: string, status: string, remarks: str
     broadcastToOrganisation(organisationId, { type: 'LEADS_UPDATE' });
 
     if (remarks) {
-      await prisma.activity.create({
-        data: {
-          type: ActivityType.NOTE,
-          content: `Contact status updated to "${status}". Remarks: ${remarks}`,
-          userId,
-          leadId: updatedLead.id,
-          organisationId
-        }
+      publish<ActivityEvent>(ROUTING_KEYS.CONTACT_UPDATED, {
+        routingKey: ROUTING_KEYS.CONTACT_UPDATED,
+        content: `Contact status updated to "${status}". Remarks: ${remarks}`,
+        userId,
+        orgId: organisationId,
+        leadId: updatedLead.id,
       });
     }
   } else {
@@ -119,26 +120,22 @@ const syncContactToLead = async (contactId: string, status: string, remarks: str
 
     broadcastToOrganisation(organisationId, { type: 'LEADS_UPDATE' });
 
-    // Create initial activity logs
-    await prisma.activity.create({
-      data: {
-        type: ActivityType.NOTE,
-        content: `Lead automatically promoted from Contact status: "${status}"`,
-        userId,
-        leadId: newLead.id,
-        organisationId
-      }
+    // Create initial activity logs via RabbitMQ
+    publish<ActivityEvent>(ROUTING_KEYS.LEAD_CREATED, {
+      routingKey: ROUTING_KEYS.LEAD_CREATED,
+      content: `Lead automatically promoted from Contact status: "${status}"`,
+      userId,
+      orgId: organisationId,
+      leadId: newLead.id,
     });
 
     if (remarks) {
-      await prisma.activity.create({
-        data: {
-          type: ActivityType.NOTE,
-          content: `Remarks: ${remarks}`,
-          userId,
-          leadId: newLead.id,
-          organisationId
-        }
+      publish<ActivityEvent>(ROUTING_KEYS.CONTACT_UPDATED, {
+        routingKey: ROUTING_KEYS.CONTACT_UPDATED,
+        content: `Remarks: ${remarks}`,
+        userId,
+        orgId: organisationId,
+        leadId: newLead.id,
       });
     }
   }
@@ -201,6 +198,8 @@ export async function createContact(req: AuthenticatedRequest, res: Response) {
     // Check promotion criteria immediately
     await syncContactToLead(contact.id, contact.status, contact.remarks, req.user!.organisationId, req.user!.id);
 
+    await clearCache(`analytics:${req.user!.organisationId}`);
+
     return res.status(201).json(contact);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -251,6 +250,8 @@ export async function updateContact(req: AuthenticatedRequest, res: Response) {
     // Sync to Lead if status/remarks updated
     await syncContactToLead(contact.id, contact.status, contact.remarks, req.user!.organisationId, req.user!.id);
 
+    await clearCache(`analytics:${req.user!.organisationId}`);
+
     return res.json(contact);
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -292,6 +293,8 @@ export async function deleteContact(req: AuthenticatedRequest, res: Response) {
 
     broadcastToOrganisation(req.user!.organisationId, { type: 'CONTACTS_UPDATE' });
 
+    await clearCache(`analytics:${req.user!.organisationId}`);
+
     return res.json({ message: 'Contact deleted successfully' });
   } catch (error) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -328,6 +331,8 @@ export async function bulkCreateContacts(req: AuthenticatedRequest, res: Respons
     }
 
     broadcastToOrganisation(req.user!.organisationId, { type: 'CONTACTS_UPDATE' });
+
+    await clearCache(`analytics:${req.user!.organisationId}`);
 
     return res.status(201).json({ message: `Successfully imported ${created.length} contacts.`, count: created.length });
   } catch (error) {

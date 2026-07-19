@@ -252,7 +252,7 @@ export default function SettingsPage() {
                       <td className="py-4.5 px-6 text-slate-500">{u.email}</td>
                       <td className="py-4.5 px-6">{getRoleBadge(u.role)}</td>
                       <td className="py-4.5 px-6 text-slate-500">
-                        {new Date(u.createdAt).toLocaleDateString()}
+                        {new Date(u.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                       </td>
                       {isAdmin && (
                         <td className="py-4.5 px-6 text-right">
