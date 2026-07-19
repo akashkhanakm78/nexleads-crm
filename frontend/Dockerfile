@@ -7,7 +7,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN npm install -g pnpm && \
     pnpm config set registry https://registry.npmmirror.com && \
     pnpm config set verify-store-integrity false && \
-    pnpm install --frozen-lockfile --ignore-scripts
+    pnpm install --no-frozen-lockfile --ignore-scripts
 
 # ─── Stage 2: Build ─────────────────────────────────────────────────────────
 FROM node:24-alpine AS builder
