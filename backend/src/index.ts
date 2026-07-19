@@ -34,10 +34,13 @@ app.get('/api/health', async (req: Request, res: Response) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    res.status(500).json({
-      status: 'ERROR',
+    // Return 200 to indicate the server process is running and healthy,
+    // but report database disconnection in the payload.
+    res.status(200).json({
+      status: 'OK',
       database: 'Disconnected',
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
     });
   }
 });
