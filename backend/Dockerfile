@@ -7,6 +7,7 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
 RUN npm install -g pnpm && \
+    pnpm config set registry https://registry.npmmirror.com && \
     pnpm config set verify-store-integrity false && \
     pnpm install --frozen-lockfile
 
@@ -27,6 +28,7 @@ ENV NODE_ENV=production
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
 RUN npm install -g pnpm && \
+    pnpm config set registry https://registry.npmmirror.com && \
     pnpm config set verify-store-integrity false && \
     pnpm install --frozen-lockfile --prod && \
     pnpm prisma generate
