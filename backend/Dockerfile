@@ -5,15 +5,13 @@ RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && \
-    pnpm config set registry https://registry.npmmirror.com && \
-    pnpm config set verify-store-integrity false && \
-    pnpm install --no-frozen-lockfile
+COPY package.json ./
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install
 
 COPY . .
-RUN pnpm prisma generate
-RUN pnpm run build
+RUN npx prisma generate
+RUN npm run build
 
 # ─── Stage 2: Production Runtime ─────────────────────────────────────────────
 FROM node:20-slim AS runner
