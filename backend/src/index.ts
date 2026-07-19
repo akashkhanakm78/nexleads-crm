@@ -20,9 +20,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(morgan('dev'));
 
-// Mount API routes
-app.use('/api', apiRouter);
-
 // Basic health check route
 app.get('/api/health', async (req: Request, res: Response) => {
   try {
@@ -44,6 +41,9 @@ app.get('/api/health', async (req: Request, res: Response) => {
     });
   }
 });
+
+// Mount API routes
+app.use('/api', apiRouter);
 
 import { createServer } from 'http';
 import { initWebSocketServer } from './websocket';
