@@ -24,17 +24,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install only production deps and regenerate Prisma client in runner
-COPY package.json pnpm-lock.yaml ./
-COPY prisma ./prisma
-RUN npm install -g pnpm && \
-    pnpm config set registry https://registry.npmmirror.com && \
-    pnpm config set verify-store-integrity false && \
-    pnpm install --frozen-lockfile --prod && \
-    pnpm prisma generate
-
-# Copy compiled output from builder
+# Copy node_modules and compiled output from builder
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY prisma ./prisma
 
 EXPOSE 5000
 
