@@ -2,7 +2,8 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // In Expo/React Native, we point to localhost (iOS simulator) or 10.0.2.2 (Android simulator) or your machine's LAN IP.
-export const BACKEND_URL = 'http://10.120.79.154:5000';
+export const BACKEND_URL = 'https://api.nexleads.nexanit.com';
+// export const BACKEND_URL = 'http://10.120.79.154:5000';
 
 interface User {
   id: string;
