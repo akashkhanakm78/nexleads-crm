@@ -35,7 +35,7 @@ async function handleNotificationEvent(payload: NotificationEvent): Promise<void
         message:        payload.message,
         userId:         payload.userId,
         organisationId: payload.orgId,
-        leadId:         payload.leadId ?? null,
+        leadId:         payload.leadId || undefined,
         isRead:         false,
       },
     });
@@ -43,7 +43,7 @@ async function handleNotificationEvent(payload: NotificationEvent): Promise<void
     // Push a badge-refresh signal to all connected clients in the org
     broadcastToOrganisation(payload.orgId, {
       type:    'NOTIFICATION',
-      payload: {
+      data: {
         title:   payload.title,
         message: payload.message,
       },

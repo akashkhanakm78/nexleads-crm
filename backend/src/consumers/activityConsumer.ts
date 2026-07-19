@@ -64,7 +64,7 @@ async function handleActivityEvent(
       type:           payload.activityType ?? ActivityType.NOTE,
       content,
       userId:         payload.userId,
-      leadId:         payload.leadId ?? null,
+      leadId:         payload.leadId || undefined,
       organisationId: payload.orgId,
     },
   });

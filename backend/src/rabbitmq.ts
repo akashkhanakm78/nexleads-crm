@@ -38,8 +38,8 @@ export const ROUTING_KEYS = {
 export type RoutingKey = typeof ROUTING_KEYS[keyof typeof ROUTING_KEYS];
 
 // ── State ────────────────────────────────────────────────────────────────────
-let connection: Connection | null = null;
-let publishChannel: Channel | null = null;
+let connection: any = null;
+let publishChannel: any = null;
 let reconnectAttempt = 0;
 let isConnecting = false;
 
@@ -67,7 +67,7 @@ async function createConnection(): Promise<void> {
   const url = process.env.RABBITMQ_URL || 'amqp://admin:adminpassword@rabbitmq:5672';
 
   try {
-    const conn = await amqplib.connect(url);
+    const conn = await (amqplib as any).connect(url);
     connection = conn;
     reconnectAttempt = 0;
     isConnecting = false;
@@ -139,7 +139,7 @@ export function publish<T = unknown>(routingKey: RoutingKey, payload: T): boolea
 export async function consume<T = unknown>(
   queue: QueueName,
   handler: (payload: T, msg: ConsumeMessage) => Promise<void>
-): Promise<Channel | null> {
+): Promise<any> {
   if (!connection) {
     console.warn('[RabbitMQ] consume() called before connection is ready');
     return null;
@@ -152,7 +152,7 @@ export async function consume<T = unknown>(
     // Process one message at a time per consumer channel
     ch.prefetch(1);
 
-    await ch.consume(queue, async (msg) => {
+    await ch.consume(queue, async (msg: ConsumeMessage | null) => {
       if (!msg) return;
 
       try {
