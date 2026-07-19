@@ -1,17 +1,19 @@
 {
   "expo": {
-    "name": "mobile",
+    "name": "NexLeads - CRM",
     "slug": "nexleads-crm",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "nexleads",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nexleads.crm"
     },
     "android": {
+      "package": "com.nexleads.crm",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
